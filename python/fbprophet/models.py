@@ -213,6 +213,7 @@ class PyStanBackend(IStanBackend):
 
     @staticmethod
     def get_type():
+        print('test ptystan')
         return StanBackendEnum.PYSTAN.name
 
     @staticmethod
@@ -288,6 +289,7 @@ class StanBackendEnum(Enum):
 
     @staticmethod
     def get_backend_class(name: str) -> IStanBackend:
+        print(StanBackendEnum[name].value)
         try:
             return StanBackendEnum[name].value
         except KeyError as e:

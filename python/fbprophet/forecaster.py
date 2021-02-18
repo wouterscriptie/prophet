@@ -22,7 +22,7 @@ logger = logging.getLogger('fbprophet')
 logger.setLevel(logging.INFO)
 
 
-class Prophet(object):
+class Prophet_Test(object):
     """Prophet forecaster.
 
     Parameters
@@ -146,10 +146,10 @@ class Prophet(object):
                 try:
                     logger.debug("Trying to load backend: %s", i.name)
                     return self._load_stan_backend(i.name)
-                except Exception as e:
+                except KeyError as e:
                     logger.debug("Unable to load backend %s (%s), trying the next one", i.name, e)
         else:
-            self.stan_backend = StanBackendEnum.get_backend_class(stan_backend)()
+            self.stan_backend = StanBackendEnum.get_backend_class(stan_backend)('test')
 
         logger.debug("Loaded stan backend: %s", self.stan_backend.get_type())
 
@@ -905,6 +905,7 @@ class Prophet(object):
         -------
         Number of fourier components, or 0 for disabled.
         """
+        logger.info('season')
         if arg == 'auto':
             fourier_order = 0
             if name in self.seasonalities:
@@ -915,7 +916,7 @@ class Prophet(object):
             elif auto_disable:
                 logger.info(
                     'Disabling {name} seasonality. Run prophet with '
-                    '{name}_seasonality=True to override this.'
+                    '{name}_seasonality=True to override this (test).'
                     .format(name=name)
                 )
             else:
@@ -1104,6 +1105,7 @@ class Prophet(object):
                 'values respectively.'
             )
         history = df[df['y'].notnull()].copy()
+        logger.info('test log')
         if history.shape[0] < 2:
             raise ValueError('Dataframe has less than 2 non-NaN rows.')
         self.history_dates = pd.to_datetime(pd.Series(df['ds'].unique(), name='ds')).sort_values()
@@ -1567,7 +1569,7 @@ class Prophet(object):
 
         if include_history:
             dates = np.concatenate((np.array(self.history_dates), dates))
-
+        print('test')
         return pd.DataFrame({'ds': dates})
 
     def plot(self, fcst, ax=None, uncertainty=True, plot_cap=True,
