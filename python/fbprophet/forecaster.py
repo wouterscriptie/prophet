@@ -14,9 +14,9 @@ from datetime import timedelta, datetime
 import numpy as np
 import pandas as pd
 
-from fbprophet.make_holidays import get_holiday_names, make_holidays_df
-from fbprophet.models import StanBackendEnum
-from fbprophet.plot import (plot, plot_components)
+from python.fbprophet.make_holidays import get_holiday_names, make_holidays_df
+from python.fbprophet.models import StanBackendEnum
+from python.fbprophet.plot import (plot, plot_components)
 
 logger = logging.getLogger('fbprophet')
 logger.setLevel(logging.INFO)
@@ -149,7 +149,7 @@ class Prophet_Test(object):
                 except KeyError as e:
                     logger.debug("Unable to load backend %s (%s), trying the next one", i.name, e)
         else:
-            self.stan_backend = StanBackendEnum.get_backend_class(stan_backend)('test')
+            self.stan_backend = StanBackendEnum.get_backend_class(stan_backend)()
 
         logger.debug("Loaded stan backend: %s", self.stan_backend.get_type())
 
@@ -916,7 +916,7 @@ class Prophet_Test(object):
             elif auto_disable:
                 logger.info(
                     'Disabling {name} seasonality. Run prophet with '
-                    '{name}_seasonality=True to override this (test).'
+                    '{name}_seasonality=True to override this.'
                     .format(name=name)
                 )
             else:
@@ -1105,7 +1105,6 @@ class Prophet_Test(object):
                 'values respectively.'
             )
         history = df[df['y'].notnull()].copy()
-        logger.info('test log')
         if history.shape[0] < 2:
             raise ValueError('Dataframe has less than 2 non-NaN rows.')
         self.history_dates = pd.to_datetime(pd.Series(df['ds'].unique(), name='ds')).sort_values()
@@ -1137,7 +1136,7 @@ class Prophet_Test(object):
             's_a': component_cols['additive_terms'],
             's_m': component_cols['multiplicative_terms'],
         }
-
+        print(dat['sigmas'])
         if self.growth == 'linear':
             dat['cap'] = np.zeros(self.history.shape[0])
             kinit = self.linear_growth_init(history)
@@ -1155,6 +1154,7 @@ class Prophet_Test(object):
             'beta': np.zeros(seasonal_features.shape[1]),
             'sigma_obs': 1,
         }
+        print(stan_init['delta'])
 
         if history['y'].min() == history['y'].max() and \
                 (self.growth == 'linear' or self.growth == 'flat'):
@@ -1166,6 +1166,7 @@ class Prophet_Test(object):
             self.params = self.stan_backend.sampling(stan_init, dat, self.mcmc_samples, **kwargs)
         else:
             self.params = self.stan_backend.fit(stan_init, dat, **kwargs)
+        print(self.params)
 
         # If no changepoints were requested, replace delta with 0s
         if len(self.changepoints) == 0:
@@ -1174,7 +1175,6 @@ class Prophet_Test(object):
                                 + self.params['delta'].reshape(-1))
             self.params['delta'] = (np.zeros(self.params['delta'].shape)
                                       .reshape((-1, 1)))
-
         return self
 
     def predict(self, df=None):
@@ -1569,7 +1569,6 @@ class Prophet_Test(object):
 
         if include_history:
             dates = np.concatenate((np.array(self.history_dates), dates))
-        print('test')
         return pd.DataFrame({'ds': dates})
 
     def plot(self, fcst, ax=None, uncertainty=True, plot_cap=True,

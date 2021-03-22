@@ -47,7 +47,7 @@ functions {
     }
     return gamma;
   }
-  
+
   real[] logistic_trend(
     real k,
     real m,

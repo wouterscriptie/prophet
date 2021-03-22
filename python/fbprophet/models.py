@@ -19,6 +19,7 @@ logger = logging.getLogger('fbprophet.models')
 
 class IStanBackend(ABC):
     def __init__(self):
+        # self.model = self.build_model('C:\\Users\\WoutervanGoudoeverVe\\Documents\\scriptie\\scriptie-wouter\\prophet\\python\\fbprophet\\stan_model', 'C:\\Users\\WoutervanGoudoeverVe\\Documents\\scriptie\\scriptie-wouter\\prophet\\python\\stan\\win')
         self.model = self.load_model()
         self.stan_fit = None
         self.newton_fallback = True
@@ -213,7 +214,6 @@ class PyStanBackend(IStanBackend):
 
     @staticmethod
     def get_type():
-        print('test ptystan')
         return StanBackendEnum.PYSTAN.name
 
     @staticmethod
@@ -245,7 +245,6 @@ class PyStanBackend(IStanBackend):
         return out
 
     def fit(self, stan_init, stan_data, **kwargs) -> dict:
-
         args = dict(
             data=stan_data,
             init=lambda: stan_init,
@@ -279,6 +278,10 @@ class PyStanBackend(IStanBackend):
             'fbprophet',
             'stan_model/prophet_model.pkl',
         )
+        # model_file = pkg_resources.resource_filename(
+        #     'python.fbprophet',
+        #     'stan_model/prophet_model.pkl',
+        # )
         with open(model_file, 'rb') as f:
             return pickle.load(f)
 

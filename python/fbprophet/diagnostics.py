@@ -121,17 +121,17 @@ def cross_validation(model, horizon, period=None, initial=None, parallel=None, c
     predict_columns = ['ds', 'yhat']
     if model.uncertainty_samples:
         predict_columns.extend(['yhat_lower', 'yhat_upper'])
-        
+
     # Identify largest seasonality period
     period_max = 0.
     for s in model.seasonalities.values():
         period_max = max(period_max, s['period'])
-    seasonality_dt = pd.Timedelta(str(period_max) + ' days')    
+    seasonality_dt = pd.Timedelta(str(period_max) + ' days')
 
     if cutoffs is None:
         # Set period
         period = 0.5 * horizon if period is None else pd.Timedelta(period)
-        
+
         # Set initial
         if initial is None:
             initial = max(3 * horizon, seasonality_dt)
@@ -141,15 +141,15 @@ def cross_validation(model, horizon, period=None, initial=None, parallel=None, c
         cutoffs = generate_cutoffs(df, horizon, initial, period)
     else:
         # add validation of the cutoff to make sure that the min cutoff is strictly greater than the min date in the history
-        if min(cutoffs) <= df['ds'].min(): 
+        if min(cutoffs) <= df['ds'].min():
             raise ValueError("Minimum cutoff value is not strictly greater than min date in history")
         # max value of cutoffs is <= (end date minus horizon)
-        end_date_minus_horizon = df['ds'].max() - horizon 
-        if max(cutoffs) > end_date_minus_horizon: 
+        end_date_minus_horizon = df['ds'].max() - horizon
+        if max(cutoffs) > end_date_minus_horizon:
             raise ValueError("Maximum cutoff value is greater than end date minus horizon, no value for cross-validation remaining")
         initial = cutoffs[0] - df['ds'].min()
-        
-    # Check if the initial window 
+
+    # Check if the initial window
     # (that is, the amount of time between the start of the history and the first cutoff)
     # is less than the maximum seasonality period
     if initial < seasonality_dt:
@@ -193,7 +193,7 @@ def cross_validation(model, horizon, period=None, initial=None, parallel=None, c
 
     else:
         predicts = [
-            single_cutoff_forecast(df, model, cutoff, horizon, predict_columns) 
+            single_cutoff_forecast(df, model, cutoff, horizon, predict_columns)
             for cutoff in (tqdm(cutoffs) if not disable_tqdm else cutoffs)
         ]
 
@@ -348,7 +348,7 @@ def performance_metrics(df, metrics=None, rolling_window=0.1, monthly=False):
         use ['mse', 'rmse', 'mae', 'mape', 'mdape', 'smape', 'coverage'].
     rolling_window: Proportion of data to use in each rolling window for
         computing the metrics. Should be in [0, 1] to average.
-    monthly: monthly=True will compute horizons as numbers of calendar months 
+    monthly: monthly=True will compute horizons as numbers of calendar months
         from the cutoff date, starting from 0 for the cutoff month.
 
     Returns
