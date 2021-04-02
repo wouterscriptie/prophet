@@ -22,6 +22,7 @@ class IStanBackend(ABC):
         # self.model = self.build_model('C:\\Users\\WoutervanGoudoeverVe\\Documents\\scriptie\\scriptie-wouter\\prophet\\python\\fbprophet\\stan_model', 'C:\\Users\\WoutervanGoudoeverVe\\Documents\\scriptie\\scriptie-wouter\\prophet\\python\\stan\\win')
         self.model = self.load_model()
         self.stan_fit = None
+        print(1)
 
         self.newton_fallback = True
 
