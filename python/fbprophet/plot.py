@@ -11,7 +11,7 @@ import logging
 import numpy as np
 import pandas as pd
 
-from fbprophet.diagnostics import performance_metrics
+from python.fbprophet.diagnostics import performance_metrics
 
 logger = logging.getLogger('fbprophet.plot')
 
@@ -41,7 +41,7 @@ except ImportError:
 
 def plot(
     m, fcst, ax=None, uncertainty=True, plot_cap=True, xlabel='ds', ylabel='y',
-    figsize=(10, 6)
+    figsize=(10, 6), y_column='y',
 ):
     """Plot the Prophet forecast.
 
@@ -68,7 +68,7 @@ def plot(
     else:
         fig = ax.get_figure()
     fcst_t = fcst['ds'].dt.to_pydatetime()
-    ax.plot(m.history['ds'].dt.to_pydatetime(), m.history['y'], 'k.')
+    ax.plot(m.history['ds'].dt.to_pydatetime(), m.history[y_column], 'k.')
     ax.plot(fcst_t, fcst['yhat'], ls='-', c='#0072B2')
     if 'cap' in fcst and plot_cap:
         ax.plot(fcst_t, fcst['cap'], ls='--', c='k')
@@ -151,7 +151,7 @@ def plot_components(
     multiplicative_axes = []
 
     dt = m.history['ds'].diff()
-    min_dt = dt.iloc[dt.values.nonzero()[0]].min() 
+    min_dt = dt.iloc[dt.values.nonzero()[0]].min()
 
     for ax, plot_name in zip(axes, components):
         if plot_name == 'trend':
@@ -855,7 +855,7 @@ def get_forecast_component_plotly_props(m, fcst, name, uncertainty=True, plot_ca
     text = None
     mode = 'lines'
     if name == 'holidays':
-        
+
         # Combine holidays into one hover text
         holidays = m.construct_holiday_dataframe(fcst['ds'])
         holiday_features, _, _ = m.make_holiday_features(fcst['ds'], holidays)

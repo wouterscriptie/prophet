@@ -22,6 +22,7 @@ class IStanBackend(ABC):
         # self.model = self.build_model('C:\\Users\\WoutervanGoudoeverVe\\Documents\\scriptie\\scriptie-wouter\\prophet\\python\\fbprophet\\stan_model', 'C:\\Users\\WoutervanGoudoeverVe\\Documents\\scriptie\\scriptie-wouter\\prophet\\python\\stan\\win')
         self.model = self.load_model()
         self.stan_fit = None
+
         self.newton_fallback = True
 
     def set_options(self, **kwargs):
@@ -219,11 +220,12 @@ class PyStanBackend(IStanBackend):
     @staticmethod
     def build_model(target_dir, model_dir):
         import pystan
-        model_name = 'prophet.stan'
+        model_name = 'prophet-multivariate(test).stan'
         target_name = 'prophet_model.pkl'
         with open(os.path.join(model_dir, model_name)) as f:
             model_code = f.read()
         sm = pystan.StanModel(model_code=model_code)
+        print(target_name)
         with open(os.path.join(target_dir, target_name), 'wb') as f:
             pickle.dump(sm, f, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -266,24 +268,25 @@ class PyStanBackend(IStanBackend):
                 raise e
 
         params = {}
-
         for par in self.stan_fit.keys():
-            params[par] = self.stan_fit[par].reshape((1, -1))
+            params[par] = self.stan_fit[par]
 
         return params
 
     def load_model(self):
         """Load compiled Stan model"""
-        model_file = pkg_resources.resource_filename(
-            'fbprophet',
-            'stan_model/prophet_model.pkl',
-        )
         # model_file = pkg_resources.resource_filename(
-        #     'python.fbprophet',
+        #     'fbprophet',
         #     'stan_model/prophet_model.pkl',
         # )
+        model_file = pkg_resources.resource_filename(
+            'python.fbprophet',
+            'stan_model/prophet_model.pkl',
+        )
         with open(model_file, 'rb') as f:
-            return pickle.load(f)
+            a = pickle.load(f)
+            # print(a)
+            return a
 
 
 class StanBackendEnum(Enum):

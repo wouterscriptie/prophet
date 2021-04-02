@@ -132,6 +132,7 @@ class Prophet_Test(object):
         self.stan_fit = None
         self.params = {}
         self.history = None
+        self.history_columns = None
         self.history_dates = None
         self.train_component_cols = None
         self.component_modes = None
@@ -253,9 +254,9 @@ class Prophet_Test(object):
         -------
         pd.DataFrame prepared for fitting or predicting.
         """
-        if 'y' in df:  # 'y' will be in training data
-            df['y'] = pd.to_numeric(df['y'])
-            if np.isinf(df['y'].values).any():
+        if self.history_columns[0] in df:  # 'y' will be in training data
+            df[self.history_columns] = df[self.history_columns].apply(pd.to_numeric)
+            if np.isinf(df[self.history_columns].values).any():
                 raise ValueError('Found infinity in column y.')
         if df['ds'].dtype == np.int64:
             df['ds'] = df['ds'].astype(str)
@@ -318,8 +319,9 @@ class Prophet_Test(object):
             df['cap_scaled'] = (df['cap'] - df['floor']) / self.y_scale
 
         df['t'] = (df['ds'] - self.start) / self.t_scale
-        if 'y' in df:
-            df['y_scaled'] = (df['y'] - df['floor']) / self.y_scale
+        for column_name in self.history_columns:
+            if column_name in df:
+                df[f'{column_name}_scaled'] = (df[column_name] - df['floor']) / self.y_scale[column_name]
 
         for name, props in self.extra_regressors.items():
             df[name] = ((df[name] - props['mu']) / props['std'])
@@ -342,9 +344,10 @@ class Prophet_Test(object):
             floor = df['floor']
         else:
             floor = 0.
-        self.y_scale = (df['y'] - floor).abs().max()
-        if self.y_scale == 0:
-            self.y_scale = 1
+        self.y_scale = (df[self.history_columns] - floor).abs().max()
+        # TODO: implement this as well
+        # if self.y_scale == 0:
+        #     self.y_scale = 1
         self.start = df['ds'].min()
         self.t_scale = df['ds'].max() - self.start
         for name, props in self.extra_regressors.items():
@@ -985,7 +988,7 @@ class Prophet_Test(object):
             }
 
     @staticmethod
-    def linear_growth_init(df):
+    def linear_growth_init(self, df):
         """Initialize linear growth.
 
         Provides a strong initialization for linear growth by calculating the
@@ -1002,10 +1005,15 @@ class Prophet_Test(object):
         A tuple (k, m) with the rate (k) and offset (m) of the linear growth
         function.
         """
-        i0, i1 = df['ds'].idxmin(), df['ds'].idxmax()
-        T = df['t'].iloc[i1] - df['t'].iloc[i0]
-        k = (df['y_scaled'].iloc[i1] - df['y_scaled'].iloc[i0]) / T
-        m = df['y_scaled'].iloc[i0] - k * df['t'].iloc[i0]
+        k = [0] * len(self.history_columns)
+        m = [0] * len(self.history_columns)
+        for f in range(len(self.history_columns)):
+            i0, i1 = df['ds'].idxmin(), df['ds'].idxmax()
+            while df[f'y{f}_scaled'].iloc[i0] == np.inf:
+                i0 += 1
+            T = df['t'].iloc[i1] - df['t'].iloc[i0]
+            k[f] = (df[f'y{f}_scaled'].iloc[i1] - df[f'y{f}_scaled'].iloc[i0]) / T
+            m[f] = df[f'y{f}_scaled'].iloc[i0] - k[f] * df['t'].iloc[i0]
         return (k, m)
 
     @staticmethod
@@ -1099,12 +1107,16 @@ class Prophet_Test(object):
         if self.history is not None:
             raise Exception('Prophet object can only be fit once. '
                             'Instantiate a new object.')
-        if ('ds' not in df) or ('y' not in df):
+        if 'ds' not in df:
             raise ValueError(
                 'Dataframe must have columns "ds" and "y" with the dates and '
                 'values respectively.'
             )
-        history = df[df['y'].notnull()].copy()
+        self.history_columns = [col for col in df.columns if 'y' in col]
+        # TODO: delete notnull and see what breaks
+        # history = df[df[self.history_columns[0]].notnull()].copy()
+        history = df.copy()
+        missing_values = history[self.history_columns].isna() * 1
         if history.shape[0] < 2:
             raise ValueError('Dataframe has less than 2 non-NaN rows.')
         self.history_dates = pd.to_datetime(pd.Series(df['ds'].unique(), name='ds')).sort_values()
@@ -1121,12 +1133,16 @@ class Prophet_Test(object):
         self.set_changepoints()
 
         trend_indicator = {'linear': 0, 'logistic': 1, 'flat': 2}
+        scaled_column_names = []
+        for column_name in self.history_columns:
+            scaled_column_names.append(f"{column_name}_scaled")
 
         dat = {
             'T': history.shape[0],
+            'F': len(self.history_columns),
             'K': seasonal_features.shape[1],
             'S': len(self.changepoints_t),
-            'y': history['y_scaled'],
+            'y': history[scaled_column_names].fillna(np.inf),
             't': history['t'],
             't_change': self.changepoints_t,
             'X': seasonal_features,
@@ -1134,12 +1150,12 @@ class Prophet_Test(object):
             'tau': self.changepoint_prior_scale,
             'trend_indicator': trend_indicator[self.growth],
             's_a': component_cols['additive_terms'],
-            's_m': component_cols['multiplicative_terms'],
+            'missing_values': missing_values
         }
-        print(dat['sigmas'])
+
         if self.growth == 'linear':
             dat['cap'] = np.zeros(self.history.shape[0])
-            kinit = self.linear_growth_init(history)
+            kinit = self.linear_growth_init(self, history)
         elif self.growth == 'flat':
             dat['cap'] = np.zeros(self.history.shape[0])
             kinit = self.flat_growth_init(history)
@@ -1150,13 +1166,13 @@ class Prophet_Test(object):
         stan_init = {
             'k': kinit[0],
             'm': kinit[1],
-            'delta': np.zeros(len(self.changepoints_t)),
-            'beta': np.zeros(seasonal_features.shape[1]),
-            'sigma_obs': 1,
+            'delta': np.zeros((len(self.changepoints_t), len(self.history_columns))),
+            'beta': np.zeros((seasonal_features.shape[1], len(self.history_columns))),
+            'sigma_obs': [1] * len(self.history_columns)
         }
-        print(stan_init['delta'])
-
-        if history['y'].min() == history['y'].max() and \
+        print(stan_init)
+        # TODO: Check if this check can be deleted
+        if history['y0'].min() == history['y0'].max() and \
                 (self.growth == 'linear' or self.growth == 'flat'):
             self.params = stan_init
             self.params['sigma_obs'] = 1e-9
@@ -1166,7 +1182,6 @@ class Prophet_Test(object):
             self.params = self.stan_backend.sampling(stan_init, dat, self.mcmc_samples, **kwargs)
         else:
             self.params = self.stan_backend.fit(stan_init, dat, **kwargs)
-        print(self.params)
 
         # If no changepoints were requested, replace delta with 0s
         if len(self.changepoints) == 0:
@@ -1199,8 +1214,7 @@ class Prophet_Test(object):
             if df.shape[0] == 0:
                 raise ValueError('Dataframe has no rows.')
             df = self.setup_dataframe(df.copy())
-
-        df['trend'] = self.predict_trend(df)
+        trends = self.predict_trend(df)
         seasonal_components = self.predict_seasonal_components(df)
         if self.uncertainty_samples:
             intervals = self.predict_uncertainty(df)
@@ -1208,17 +1222,19 @@ class Prophet_Test(object):
             intervals = None
 
         # Drop columns except ds, cap, floor, and trend
-        cols = ['ds', 'trend']
+        cols = ['ds']
         if 'cap' in df:
             cols.append('cap')
         if self.logistic_floor:
             cols.append('floor')
         # Add in forecast components
-        df2 = pd.concat((df[cols], intervals, seasonal_components), axis=1)
-        df2['yhat'] = (
-                df2['trend'] * (1 + df2['multiplicative_terms'])
-                + df2['additive_terms']
-        )
+        df2 = {}
+        for i, code in enumerate(self.history_columns):
+            df2[code] = pd.concat((df[cols], trends[code], intervals, seasonal_components[code]), axis=1)
+            df2[code]['yhat'] = (
+                df2[code]['trend'] * (1 + df2[code]['multiplicative_terms'])
+                + df2[code]['additive_terms']
+            )
         return df2
 
     @staticmethod
@@ -1248,55 +1264,6 @@ class Prophet_Test(object):
             m_t[indx] += gammas[s]
         return k_t * t + m_t
 
-    @staticmethod
-    def piecewise_logistic(t, cap, deltas, k, m, changepoint_ts):
-        """Evaluate the piecewise logistic function.
-
-        Parameters
-        ----------
-        t: np.array of times on which the function is evaluated.
-        cap: np.array of capacities at each t.
-        deltas: np.array of rate changes at each changepoint.
-        k: Float initial rate.
-        m: Float initial offset.
-        changepoint_ts: np.array of changepoint times.
-
-        Returns
-        -------
-        Vector y(t).
-        """
-        # Compute offset changes
-        k_cum = np.concatenate((np.atleast_1d(k), np.cumsum(deltas) + k))
-        gammas = np.zeros(len(changepoint_ts))
-        for i, t_s in enumerate(changepoint_ts):
-            gammas[i] = (
-                    (t_s - m - np.sum(gammas))
-                    * (1 - k_cum[i] / k_cum[i + 1])  # noqa W503
-            )
-        # Get cumulative rate and offset at each t
-        k_t = k * np.ones_like(t)
-        m_t = m * np.ones_like(t)
-        for s, t_s in enumerate(changepoint_ts):
-            indx = t >= t_s
-            k_t[indx] += deltas[s]
-            m_t[indx] += gammas[s]
-        return cap / (1 + np.exp(-k_t * (t - m_t)))
-
-    @staticmethod
-    def flat_trend(t, m):
-        """Evaluate the flat trend function.
-
-        Parameters
-        ----------
-        t: np.array of times on which the function is evaluated.
-        m: Float initial offset.
-
-        Returns
-        -------
-        Vector y(t).
-        """
-        m_t = m * np.ones_like(t)
-        return m_t
 
     def predict_trend(self, df):
         """Predict trend using the prophet model.
@@ -1309,22 +1276,16 @@ class Prophet_Test(object):
         -------
         Vector with trend on prediction dates.
         """
-        k = np.nanmean(self.params['k'])
-        m = np.nanmean(self.params['m'])
-        deltas = np.nanmean(self.params['delta'], axis=0)
-
+        k = self.params['k']
+        m = self.params['m']
+        deltas = self.params['delta']
         t = np.array(df['t'])
-        if self.growth == 'linear':
-            trend = self.piecewise_linear(t, deltas, k, m, self.changepoints_t)
-        elif self.growth == 'logistic':
-            cap = df['cap_scaled']
-            trend = self.piecewise_logistic(
-                t, cap, deltas, k, m, self.changepoints_t)
-        elif self.growth == 'flat':
-            # constant trend
-            trend = self.flat_trend(t, m)
-
-        return trend * self.y_scale + df['floor']
+        trend = {}
+        for i, code in enumerate(self.history_columns):
+            trend_serie = self.piecewise_linear(t, deltas[:, i], k[i], m[i], self.changepoints_t)
+            trend_df = pd.DataFrame(trend_serie * self.y_scale[i] + df['floor'])
+            trend[code] = trend_df.rename(columns={'floor': 'trend'})
+        return trend
 
     def predict_seasonal_components(self, df):
         """Predict seasonality components, holidays, and added regressors.
@@ -1346,21 +1307,25 @@ class Prophet_Test(object):
 
         X = seasonal_features.values
         data = {}
-        for component in component_cols.columns:
-            beta_c = self.params['beta'] * component_cols[component].values
+        all_data = {}
+        for i, code in enumerate(self.history_columns):
+            for component in component_cols.columns:
+                beta_reshape = self.params['beta'][:, i].reshape(1, len(self.params['beta'][:, i]))
+                beta_c = beta_reshape * component_cols[component].values
 
-            comp = np.matmul(X, beta_c.transpose())
-            if component in self.component_modes['additive']:
-                comp *= self.y_scale
-            data[component] = np.nanmean(comp, axis=1)
-            if self.uncertainty_samples:
-                data[component + '_lower'] = self.percentile(
-                    comp, lower_p, axis=1,
-                )
-                data[component + '_upper'] = self.percentile(
-                    comp, upper_p, axis=1,
-                )
-        return pd.DataFrame(data)
+                comp = np.matmul(X, beta_c.transpose())
+                if component in self.component_modes['additive']:
+                    comp *= self.y_scale[i]
+                data[component] = np.nanmean(comp, axis=1)
+                if self.uncertainty_samples:
+                    data[component + '_lower'] = self.percentile(
+                        comp, lower_p, axis=1,
+                    )
+                    data[component + '_upper'] = self.percentile(
+                        comp, upper_p, axis=1,
+                    )
+            all_data[code] = pd.DataFrame(data)
+        return all_data
 
     def sample_posterior_predictive(self, df):
         """Prophet posterior predictive samples.
@@ -1392,7 +1357,6 @@ class Prophet_Test(object):
                     seasonal_features=seasonal_features,
                     iteration=i,
                     s_a=component_cols['additive_terms'],
-                    s_m=component_cols['multiplicative_terms'],
                 )
                 for key in sim_values:
                     sim_values[key].append(sim[key])
@@ -1448,7 +1412,7 @@ class Prophet_Test(object):
 
         return pd.DataFrame(series)
 
-    def sample_model(self, df, seasonal_features, iteration, s_a, s_m):
+    def sample_model(self, df, seasonal_features, iteration, s_a):
         """Simulate observations from the extrapolated generative model.
 
         Parameters
@@ -1465,16 +1429,15 @@ class Prophet_Test(object):
         """
         trend = self.sample_predictive_trend(df, iteration)
 
-        beta = self.params['beta'][iteration]
+        beta = self.params['beta'][:, iteration]
         Xb_a = np.matmul(seasonal_features.values,
-                         beta * s_a.values) * self.y_scale
-        Xb_m = np.matmul(seasonal_features.values, beta * s_m.values)
+                         beta * s_a.values) * self.y_scale[iteration]
 
         sigma = self.params['sigma_obs'][iteration]
-        noise = np.random.normal(0, sigma, df.shape[0]) * self.y_scale
+        noise = np.random.normal(0, sigma, df.shape[0]) * self.y_scale[iteration]
 
         return pd.DataFrame({
-            'yhat': trend * (1 + Xb_m) + Xb_a + noise,
+            'yhat': trend + Xb_a + noise,
             'trend': trend
         })
 
@@ -1492,7 +1455,7 @@ class Prophet_Test(object):
         """
         k = self.params['k'][iteration]
         m = self.params['m'][iteration]
-        deltas = self.params['delta'][iteration]
+        deltas = self.params['delta'][:, iteration]
 
         t = np.array(df['t'])
         T = t.max()
@@ -1529,7 +1492,7 @@ class Prophet_Test(object):
         elif self.growth == 'flat':
             trend = self.flat_trend(t, m)
 
-        return trend * self.y_scale + df['floor']
+        return trend * self.y_scale[iteration] + df['floor']
 
     def percentile(self, a, *args, **kwargs):
         """
@@ -1572,7 +1535,7 @@ class Prophet_Test(object):
         return pd.DataFrame({'ds': dates})
 
     def plot(self, fcst, ax=None, uncertainty=True, plot_cap=True,
-             xlabel='ds', ylabel='y', figsize=(10, 6)):
+             xlabel='ds', ylabel='y', figsize=(10, 6), y_column='y'):
         """Plot the Prophet forecast.
 
         Parameters
@@ -1593,7 +1556,7 @@ class Prophet_Test(object):
         return plot(
             m=self, fcst=fcst, ax=ax, uncertainty=uncertainty,
             plot_cap=plot_cap, xlabel=xlabel, ylabel=ylabel,
-            figsize=figsize
+            figsize=figsize, y_column=y_column
         )
 
     def plot_components(self, fcst, uncertainty=True, plot_cap=True,
