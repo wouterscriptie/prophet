@@ -136,28 +136,29 @@ transformed parameters {
   
   Y_matrix_2 = trend + seas_matrix;
   Y = to_array_2d(Y_matrix_2);
-  //Y = rep_array(0, T, F);
 
-  //for (f in 1:F)
-    //for (i in 1:T){
-      //Y[i,f] = (trend[i,f]);
-   //}
+  for (f in 1:F)
+    for (i in 1:T){
+      if (missing_values[i,f] == 1){
+        Y[i,f] = 0;
+      }
+   }
 }
 
 model {
   //hyperpriors
   mu_beta ~ normal(0, sigmas);
-  sigma_beta ~ normal(0, 0.01);
+  sigma_beta ~ normal(0, 0.1);
   mu_delta ~ double_exponential(0, tau);
-  sigma_delta ~ normal(0, 0.01);
+  sigma_delta ~ normal(0, 0.1);
 
   //priors
   k ~ normal(0, 5);
   m ~ normal(0, 5);
   sigma_obs ~ normal(0, 0.5);
   for (f in 1:F){
-    delta[ , f] ~ normal(mu_delta, sigma_delta);
-    //delta[ , f] ~ double_exponential(0, tau);
+    //delta[ , f] ~ normal(mu_delta, sigma_delta);
+    delta[ , f] ~ double_exponential(0, tau);
   }
   for (f in 1:F){  
     beta[ , f] ~ normal(mu_beta, sigma_beta); 
@@ -168,6 +169,6 @@ model {
     for (i in 1:T){
       if (missing_values[i,f] == 0){
         y[i , f] ~ normal(Y[i , f], sigma_obs[f]);
-      }  
+      }
   }  
 }

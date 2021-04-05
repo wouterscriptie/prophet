@@ -22,7 +22,6 @@ class IStanBackend(ABC):
         # self.model = self.build_model('C:\\Users\\WoutervanGoudoeverVe\\Documents\\scriptie\\scriptie-wouter\\prophet\\python\\fbprophet\\stan_model', 'C:\\Users\\WoutervanGoudoeverVe\\Documents\\scriptie\\scriptie-wouter\\prophet\\python\\stan\\win')
         self.model = self.load_model()
         self.stan_fit = None
-        print(1)
 
         self.newton_fallback = True
 
@@ -221,7 +220,7 @@ class PyStanBackend(IStanBackend):
     @staticmethod
     def build_model(target_dir, model_dir):
         import pystan
-        model_name = 'prophet-multivariate(test).stan'
+        model_name = 'prophet-multivariate(missing).stan'
         target_name = 'prophet_model.pkl'
         with open(os.path.join(model_dir, model_name)) as f:
             model_code = f.read()

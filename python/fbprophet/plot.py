@@ -62,6 +62,7 @@ def plot(
     -------
     A matplotlib figure.
     """
+    fcst = fcst[y_column]
     if ax is None:
         fig = plt.figure(facecolor='w', figsize=figsize)
         ax = fig.add_subplot(111)
@@ -91,7 +92,7 @@ def plot(
 
 def plot_components(
     m, fcst, uncertainty=True, plot_cap=True, weekly_start=0, yearly_start=0,
-    figsize=None
+    figsize=None, y_column='y'
 ):
     """Plot the Prophet forecast components.
 
@@ -119,6 +120,7 @@ def plot_components(
     -------
     A matplotlib figure.
     """
+    fcst = fcst[y_column]
     # Identify components to be plotted
     components = ['trend']
     if m.train_holiday_names is not None and 'holidays' in fcst:
@@ -165,11 +167,11 @@ def plot_components(
                 and (min_dt == pd.Timedelta(days=1))
             ):
                 plot_weekly(
-                    m=m, name=plot_name, ax=ax, uncertainty=uncertainty, weekly_start=weekly_start
+                    m=m, name=plot_name, ax=ax, uncertainty=uncertainty, weekly_start=weekly_start, y_column=y_column
                 )
             elif plot_name == 'yearly' or m.seasonalities[plot_name]['period'] == 365.25:
                 plot_yearly(
-                    m=m, name=plot_name, ax=ax, uncertainty=uncertainty, yearly_start=yearly_start
+                    m=m, name=plot_name, ax=ax, uncertainty=uncertainty, yearly_start=yearly_start, y_column=y_column
                 )
             else:
                 plot_seasonality(
@@ -266,7 +268,7 @@ def seasonality_plot_df(m, ds):
     return df
 
 
-def plot_weekly(m, ax=None, uncertainty=True, weekly_start=0, figsize=(10, 6), name='weekly'):
+def plot_weekly(m, ax=None, uncertainty=True, weekly_start=0, figsize=(10, 6), name='weekly', y_column='y'):
     """Plot the weekly component of the forecast.
 
     Parameters
@@ -296,6 +298,8 @@ def plot_weekly(m, ax=None, uncertainty=True, weekly_start=0, figsize=(10, 6), n
     df_w = seasonality_plot_df(m, days)
     seas = m.predict_seasonal_components(df_w)
     days = days.day_name()
+    seas = seas[y_column]
+
     artists += ax.plot(range(len(days)), seas[name], ls='-',
                     c='#0072B2')
     if uncertainty and m.uncertainty_samples:
@@ -312,7 +316,7 @@ def plot_weekly(m, ax=None, uncertainty=True, weekly_start=0, figsize=(10, 6), n
     return artists
 
 
-def plot_yearly(m, ax=None, uncertainty=True, yearly_start=0, figsize=(10, 6), name='yearly'):
+def plot_yearly(m, ax=None, uncertainty=True, yearly_start=0, figsize=(10, 6), name='yearly', y_column='y'):
     """Plot the yearly component of the forecast.
 
     Parameters
@@ -341,6 +345,7 @@ def plot_yearly(m, ax=None, uncertainty=True, yearly_start=0, figsize=(10, 6), n
             pd.Timedelta(days=yearly_start))
     df_y = seasonality_plot_df(m, days)
     seas = m.predict_seasonal_components(df_y)
+    seas = seas[y_column]
     artists += ax.plot(
         df_y['ds'].dt.to_pydatetime(), seas[name], ls='-', c='#0072B2')
     if uncertainty and m.uncertainty_samples:

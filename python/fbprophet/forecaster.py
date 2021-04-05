@@ -1009,8 +1009,9 @@ class Prophet_Test(object):
         m = [0] * len(self.history_columns)
         for f in range(len(self.history_columns)):
             i0, i1 = df['ds'].idxmin(), df['ds'].idxmax()
-            while df[f'y{f}_scaled'].iloc[i0] == np.inf:
+            while df[f'y{f}_scaled'].iloc[i0] == 0:
                 i0 += 1
+                print(i0)
             T = df['t'].iloc[i1] - df['t'].iloc[i0]
             k[f] = (df[f'y{f}_scaled'].iloc[i1] - df[f'y{f}_scaled'].iloc[i0]) / T
             m[f] = df[f'y{f}_scaled'].iloc[i0] - k[f] * df['t'].iloc[i0]
@@ -1113,10 +1114,9 @@ class Prophet_Test(object):
                 'values respectively.'
             )
         self.history_columns = [col for col in df.columns if 'y' in col]
-        # TODO: delete notnull and see what breaks
-        # history = df[df[self.history_columns[0]].notnull()].copy()
         history = df.copy()
         missing_values = history[self.history_columns].isna() * 1
+        history = history.fillna(0)
         if history.shape[0] < 2:
             raise ValueError('Dataframe has less than 2 non-NaN rows.')
         self.history_dates = pd.to_datetime(pd.Series(df['ds'].unique(), name='ds')).sort_values()
@@ -1170,7 +1170,6 @@ class Prophet_Test(object):
             'beta': np.zeros((seasonal_features.shape[1], len(self.history_columns))),
             'sigma_obs': [1] * len(self.history_columns)
         }
-        print(stan_init)
         # TODO: Check if this check can be deleted
         if history['y0'].min() == history['y0'].max() and \
                 (self.growth == 'linear' or self.growth == 'flat'):
@@ -1560,7 +1559,7 @@ class Prophet_Test(object):
         )
 
     def plot_components(self, fcst, uncertainty=True, plot_cap=True,
-                        weekly_start=0, yearly_start=0, figsize=None):
+                        weekly_start=0, yearly_start=0, figsize=None, y_column='y'):
         """Plot the Prophet forecast components.
 
         Will plot whichever are available of: trend, holidays, weekly
@@ -1587,5 +1586,5 @@ class Prophet_Test(object):
         return plot_components(
             m=self, fcst=fcst, uncertainty=uncertainty, plot_cap=plot_cap,
             weekly_start=weekly_start, yearly_start=yearly_start,
-            figsize=figsize
+            figsize=figsize, y_column=y_column
         )
